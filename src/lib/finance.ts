@@ -135,6 +135,8 @@ export function analyze(txns: Txn[], cashBalance: number) {
     runwayMonths,
     cashBalance,
     topCategories,
+    expenseByCategory,
+
     totalExpense,
     totalIncome,
     anomalies: detectAnomalies(txns),
