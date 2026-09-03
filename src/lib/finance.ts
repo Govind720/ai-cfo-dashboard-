@@ -120,10 +120,11 @@ export function analyze(txns: Txn[], cashBalance: number) {
       const c = t.category?.trim() || "Uncategorized";
       catTotals.set(c, (catTotals.get(c) ?? 0) + t.amount);
     });
-  const topCategories = [...catTotals.entries()]
+  const expenseByCategory = [...catTotals.entries()]
     .map(([category, total]) => ({ category, total }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 5);
+    .sort((a, b) => b.total - a.total);
+  const topCategories = expenseByCategory.slice(0, 5);
+
 
   const totalExpense = sum(txns.filter((t) => t.type === "expense"));
   const totalIncome = sum(txns.filter((t) => t.type === "income"));
