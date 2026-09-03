@@ -3,51 +3,41 @@ import type { Txn } from "./finance";
 type Row = Omit<Txn, "id">;
 
 const rows: Row[] = [];
-let n = 0;
 const push = (r: Row) => rows.push(r);
 
-const months = ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08"];
+// Three Indian financial years: FY2023-24, FY2024-25, FY2025-26 (Apr -> Mar)
+function fyMonths(startYear: number) {
+  const out: string[] = [];
+  for (let i = 0; i < 12; i++) {
+    const m = 4 + i;
+    const y = m > 12 ? startYear + 1 : startYear;
+    const mm = ((m - 1) % 12) + 1;
+    out.push(`${y}-${String(mm).padStart(2, "0")}`);
+  }
+  return out;
+}
 
-const salaries: Record<string, number> = {
-  "2026-03": 1850000,
-  "2026-04": 1850000,
-  "2026-05": 1980000,
-  "2026-06": 1980000,
-  "2026-07": 2240000,
-  "2026-08": 2240000,
-};
-const aws: Record<string, number> = {
-  "2026-03": 312000,
-  "2026-04": 348000,
-  "2026-05": 361000,
-  "2026-06": 402000,
-  "2026-07": 918000, // July spike (load test + new region)
-  "2026-08": 437000,
-};
-const marketing: Record<string, number> = {
-  "2026-03": 420000,
-  "2026-04": 465000,
-  "2026-05": 510000,
-  "2026-06": 495000,
-  "2026-07": 1480000, // July spike (product launch campaign)
-  "2026-08": 560000,
-};
-const revenue: Record<string, number> = {
-  "2026-03": 2650000,
-  "2026-04": 2810000,
-  "2026-05": 3020000,
-  "2026-06": 3180000,
-  "2026-07": 3420000,
-  "2026-08": 3740000,
-};
+const months = [...fyMonths(2023), ...fyMonths(2024), ...fyMonths(2025)];
 
-for (const m of months) {
+const round = (n: number) => Math.round(n / 1000) * 1000;
+
+months.forEach((m, i) => {
+  const monthNum = Number(m.slice(5, 7));
+  const isJuly = monthNum === 7;
+  const growth = Math.pow(1.031, i); // steady compounding scale-up
+
+  const salaries = round(1120000 * growth * (monthNum === 4 ? 1.06 : 1)); // appraisals in April
+  const cloud = round(210000 * growth * (isJuly ? 2.4 : 1)); // July load-test + new region
+  const marketingTotal = round(280000 * growth * (isJuly ? 2.8 : monthNum === 10 ? 1.4 : 1)); // July launch, Oct festive
+  const revenue = round(1750000 * Math.pow(1.036, i) * (monthNum === 10 ? 1.12 : 1));
+  const rent = round(240000 * Math.pow(1.0045, i));
+
   push({
     date: `${m}-01`,
     description: "Monthly payroll disbursement",
     vendor: "RazorpayX Payroll",
     category: "Salaries",
-    amount: salaries[m]!,
+    amount: salaries,
     type: "expense",
   });
   push({
@@ -55,7 +45,7 @@ for (const m of months) {
     description: "AWS cloud infrastructure invoice",
     vendor: "Amazon Web Services",
     category: "Cloud Infrastructure",
-    amount: aws[m]!,
+    amount: cloud,
     type: "expense",
   });
   push({
@@ -63,7 +53,7 @@ for (const m of months) {
     description: "Performance marketing spend",
     vendor: "Google Ads",
     category: "Marketing",
-    amount: Math.round(marketing[m]! * 0.6),
+    amount: round(marketingTotal * 0.6),
     type: "expense",
   });
   push({
@@ -71,7 +61,7 @@ for (const m of months) {
     description: "Social campaign spend",
     vendor: "Meta Ads",
     category: "Marketing",
-    amount: Math.round(marketing[m]! * 0.4),
+    amount: round(marketingTotal * 0.4),
     type: "expense",
   });
   push({
@@ -79,7 +69,7 @@ for (const m of months) {
     description: "Office rent - Koramangala HQ",
     vendor: "Prestige Estates",
     category: "Rent",
-    amount: 385000,
+    amount: rent,
     type: "expense",
   });
   push({
@@ -87,7 +77,7 @@ for (const m of months) {
     description: "GST payment for previous month",
     vendor: "GSTN Portal",
     category: "Taxes",
-    amount: Math.round(revenue[m]! * 0.09),
+    amount: round(revenue * 0.09),
     type: "expense",
   });
   push({
@@ -95,7 +85,7 @@ for (const m of months) {
     description: "Razorpay payment gateway fees",
     vendor: "Razorpay",
     category: "Payment Processing",
-    amount: Math.round(revenue[m]! * 0.021),
+    amount: round(revenue * 0.021),
     type: "expense",
   });
   push({
@@ -103,7 +93,7 @@ for (const m of months) {
     description: "SaaS subscriptions (Slack, Notion, Figma, Zoom)",
     vendor: "Multiple SaaS",
     category: "Software",
-    amount: 148000 + n * 4000,
+    amount: round(88000 + i * 3200),
     type: "expense",
   });
   push({
@@ -111,7 +101,7 @@ for (const m of months) {
     description: "Contract engineering & design",
     vendor: "Freelancers (Contra)",
     category: "Contractors",
-    amount: 210000,
+    amount: round(130000 * growth),
     type: "expense",
   });
   push({
@@ -119,7 +109,7 @@ for (const m of months) {
     description: "Team travel & client meetings",
     vendor: "MakeMyTrip Business",
     category: "Travel",
-    amount: 92000,
+    amount: round(58000 * growth * (monthNum === 1 || monthNum === 9 ? 1.7 : 1)),
     type: "expense",
   });
   push({
@@ -127,25 +117,26 @@ for (const m of months) {
     description: "SaaS subscription revenue collected",
     vendor: "Customer collections",
     category: "Revenue",
-    amount: revenue[m]!,
+    amount: revenue,
     type: "income",
   });
-  n++;
-}
 
-// Hidden duplicate: AWS July invoice paid twice
-push({
-  date: "2026-07-07",
-  description: "AWS cloud infrastructure invoice",
-  vendor: "Amazon Web Services",
-  category: "Cloud Infrastructure",
-  amount: aws["2026-07"]!,
-  type: "expense",
+  // Hidden duplicate: AWS July invoice paid twice in the latest financial year
+  if (isJuly && m.startsWith("2025")) {
+    push({
+      date: `${m}-07`,
+      description: "AWS cloud infrastructure invoice",
+      vendor: "Amazon Web Services",
+      category: "Cloud Infrastructure",
+      amount: cloud,
+      type: "expense",
+    });
+  }
 });
 
 // A couple of uncategorized rows for the AI categorizer
 push({
-  date: "2026-08-11",
+  date: "2026-02-11",
   description: "Zoho Books annual accounting subscription",
   vendor: "Zoho",
   category: "",
@@ -153,7 +144,7 @@ push({
   type: "expense",
 });
 push({
-  date: "2026-08-19",
+  date: "2026-02-19",
   description: "Employee health insurance premium",
   vendor: "ICICI Lombard",
   category: "",
