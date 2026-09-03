@@ -120,10 +120,11 @@ export function analyze(txns: Txn[], cashBalance: number) {
       const c = t.category?.trim() || "Uncategorized";
       catTotals.set(c, (catTotals.get(c) ?? 0) + t.amount);
     });
-  const topCategories = [...catTotals.entries()]
+  const expenseByCategory = [...catTotals.entries()]
     .map(([category, total]) => ({ category, total }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 5);
+    .sort((a, b) => b.total - a.total);
+  const topCategories = expenseByCategory.slice(0, 5);
+
 
   const totalExpense = sum(txns.filter((t) => t.type === "expense"));
   const totalIncome = sum(txns.filter((t) => t.type === "income"));
@@ -134,6 +135,8 @@ export function analyze(txns: Txn[], cashBalance: number) {
     runwayMonths,
     cashBalance,
     topCategories,
+    expenseByCategory,
+
     totalExpense,
     totalIncome,
     anomalies: detectAnomalies(txns),
@@ -240,4 +243,173 @@ export function buildSummary(a: Analytics, txns: Txn[]) {
       lines.push(`- ${t.date} ${t.vendor} (${t.category}) ${inr(t.amount)} — ${t.description}`),
     );
   return lines.join("\n");
+}
+
+/* ---------- Indian financial year helpers ---------- */
+
+export function fyKey(date: string): string {
+  const y = Number(date.slice(0, 4));
+  const m = Number(date.slice(5, 7));
+  const start = m >= 4 ? y : y - 1;
+  return `FY${start}-${String((start + 1) % 100).padStart(2, "0")}`;
+}
+
+export const FY_MONTH_LABELS = [
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+  "Jan",
+  "Feb",
+  "Mar",
+];
+
+/** 0-11 index within a financial year (Apr = 0). */
+export const fyMonthIndex = (date: string) => (Number(date.slice(5, 7)) + 8) % 12;
+
+export function fiscalYears(txns: Txn[]): string[] {
+  return [...new Set(txns.map((t) => fyKey(t.date)))].sort();
+}
+
+/** All selectable comparison elements: "Income", "Total expenses" + each expense category. */
+export function comparisonElements(txns: Txn[]): string[] {
+  const cats = [
+    ...new Set(
+      txns
+        .filter((t) => t.type === "expense")
+        .map((t) => t.category?.trim() || "Uncategorized"),
+    ),
+  ].sort();
+  return ["Income", "Total expenses", ...cats];
+}
+
+function matchesElement(t: Txn, element: string) {
+  if (element === "Income") return t.type === "income";
+  if (element === "Total expenses") return t.type === "expense";
+  return t.type === "expense" && (t.category?.trim() || "Uncategorized") === element;
+}
+
+export type ComparisonRow = { month: string } & Record<string, number | string>;
+
+/** Rows keyed by FY-month label with one series per financial year. */
+export function compareAcrossYears(txns: Txn[], element: string) {
+  const years = fiscalYears(txns);
+  const rows: ComparisonRow[] = FY_MONTH_LABELS.map((month) => {
+    const row: ComparisonRow = { month };
+    years.forEach((y) => (row[y] = 0));
+    return row;
+  });
+  txns.filter((t) => matchesElement(t, element)).forEach((t) => {
+    const row = rows[fyMonthIndex(t.date)]!;
+    const y = fyKey(t.date);
+    row[y] = ((row[y] as number) ?? 0) + t.amount;
+  });
+  const totals = years.map((y) => ({
+    year: y,
+    total: txns
+      .filter((t) => fyKey(t.date) === y && matchesElement(t, element))
+      .reduce((a, t) => a + t.amount, 0),
+  }));
+  return { years, rows, totals };
+}
+
+/* ---------- Budgets ---------- */
+
+export type BudgetStatus = {
+  category: string;
+  budget: number;
+  actual: number;
+  pct: number;
+  over: boolean;
+};
+
+/** Actual spend per category for a given month key (yyyy-mm). */
+export function budgetStatus(
+  txns: Txn[],
+  budgets: Record<string, number>,
+  month: string,
+): BudgetStatus[] {
+  const actuals = new Map<string, number>();
+  txns
+    .filter((t) => t.type === "expense" && monthKey(t.date) === month)
+    .forEach((t) => {
+      const c = t.category?.trim() || "Uncategorized";
+      actuals.set(c, (actuals.get(c) ?? 0) + t.amount);
+    });
+  const cats = [...new Set([...Object.keys(budgets), ...actuals.keys()])].sort();
+  return cats
+    .map((category) => {
+      const budget = budgets[category] ?? 0;
+      const actual = actuals.get(category) ?? 0;
+      return {
+        category,
+        budget,
+        actual,
+        pct: budget > 0 ? (actual / budget) * 100 : 0,
+        over: budget > 0 && actual > budget,
+      };
+    })
+    .sort((a, b) => b.actual - a.actual);
+}
+
+/** Suggested budgets = average monthly spend per category over the last 3 months. */
+export function suggestBudgets(txns: Txn[]): Record<string, number> {
+  const months = [...new Set(txns.map((t) => monthKey(t.date)))].sort().slice(-3);
+  const out: Record<string, number> = {};
+  txns
+    .filter((t) => t.type === "expense" && months.includes(monthKey(t.date)))
+    .forEach((t) => {
+      const c = t.category?.trim() || "Uncategorized";
+      out[c] = (out[c] ?? 0) + t.amount;
+    });
+  Object.keys(out).forEach((k) => (out[k] = Math.round(out[k]! / (months.length || 1) / 1000) * 1000));
+  return out;
+}
+
+/* ---------- Statements ---------- */
+
+export type StatementLine = { label: string; amount: number; bold?: boolean; indent?: boolean };
+
+export function profitAndLoss(txns: Txn[], fy: string) {
+  const rows = txns.filter((t) => fyKey(t.date) === fy);
+  const incomeByCat = new Map<string, number>();
+  const expenseByCat = new Map<string, number>();
+  rows.forEach((t) => {
+    const c = t.category?.trim() || "Uncategorized";
+    const map = t.type === "income" ? incomeByCat : expenseByCat;
+    map.set(c, (map.get(c) ?? 0) + t.amount);
+  });
+  const income = [...incomeByCat.entries()].sort((a, b) => b[1] - a[1]);
+  const expenses = [...expenseByCat.entries()].sort((a, b) => b[1] - a[1]);
+  const totalIncome = income.reduce((a, [, v]) => a + v, 0);
+  const totalExpense = expenses.reduce((a, [, v]) => a + v, 0);
+  const taxes = expenseByCat.get("Taxes") ?? 0;
+  return {
+    fy,
+    income,
+    expenses,
+    totalIncome,
+    totalExpense,
+    pbt: totalIncome - (totalExpense - taxes),
+    taxes,
+    net: totalIncome - totalExpense,
+  };
+}
+
+export function cashFlow(txns: Txn[], fy: string, closingCash: number) {
+  const rows = txns.filter((t) => fyKey(t.date) === fy);
+  const months = [...new Set(rows.map((t) => monthKey(t.date)))].sort();
+  const monthly = months.map((m) => {
+    const r = rows.filter((t) => monthKey(t.date) === m);
+    const inflow = r.filter((t) => t.type === "income").reduce((a, t) => a + t.amount, 0);
+    const outflow = r.filter((t) => t.type === "expense").reduce((a, t) => a + t.amount, 0);
+    return { month: m, label: monthLabel(m), inflow, outflow, net: inflow - outflow };
+  });
+  const netChange = monthly.reduce((a, m) => a + m.net, 0);
+  return { fy, monthly, netChange, opening: closingCash - netChange, closing: closingCash };
 }
