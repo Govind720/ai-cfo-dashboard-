@@ -1,30 +1,43 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const MODEL = "google/gemini-3.7-flash";
+const MODEL = "gemini-2.5-flash";
+const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 async function callGemini(messages: Array<{ role: string; content: string }>) {
-  const key = process.env["LOVABLE_API_KEY"];
-  if (!key) throw new Error("AI is not configured (missing API key).");
+  const key = process.env["GEMINI_API_KEY"];
+  if (!key) throw new Error("Gemini is not configured (missing GEMINI_API_KEY).");
 
-  const res = await fetch(GATEWAY, {
+  const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
+  const contents = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    }));
+
+  const res = await fetch(ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model: MODEL, messages }),
+    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+    body: JSON.stringify({
+      contents,
+      ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+    }),
   });
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    if (res.status === 429) throw new Error("AI rate limit reached. Please retry in a moment.");
-    if (res.status === 402) throw new Error("AI credits exhausted. Please top up to continue.");
-    throw new Error(`AI request failed (${res.status}). ${text.slice(0, 200)}`);
+    if (res.status === 429) throw new Error("Gemini rate limit reached. Please retry in a moment.");
+    if (res.status === 401 || res.status === 403)
+      throw new Error("Gemini rejected the API key. Please check GEMINI_API_KEY.");
+    throw new Error(`Gemini request failed (${res.status}). ${text.slice(0, 200)}`);
   }
   const json = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
   };
-  return json.choices?.[0]?.message?.content ?? "";
+  return (json.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("");
 }
+
 
 const CategorizeInput = z.object({
   items: z
