@@ -117,3 +117,25 @@ ${data.summary}`;
     ]);
     return { answer: answer || "I couldn't generate an answer. Please try rephrasing." };
   });
+
+const BriefingInput = z.object({
+  fy: z.string().min(1).max(20),
+  summary: z.string().min(1),
+});
+
+export const cfoBriefing = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => BriefingInput.parse(input))
+  .handler(async ({ data }) => {
+    const system = `You are the AI CFO of an Indian startup writing an executive briefing for the board.
+Write EXACTLY three sentences, plain text, no bullets, no markdown:
+1) Performance of ${data.fy} with specific numbers (use lakh/crore phrasing and the Rs symbol as INR).
+2) The single highest-impact cost-saving opportunity, quantified.
+3) The main cash-flow or compliance risk, quantified.
+Be concrete and cite figures from the context. No preamble.`;
+
+    const answer = await callGemini([
+      { role: "system", content: system },
+      { role: "user", content: `FINANCIAL CONTEXT for ${data.fy}:\n${data.summary}` },
+    ]);
+    return { briefing: answer.trim() };
+  });
