@@ -14,8 +14,15 @@ import {
   Wallet,
 } from "lucide-react";
 import { Sidebar } from "@/components/cfo/Sidebar";
-import { ExpenseTrendChart, TopCategoriesChart } from "@/components/cfo/Charts";
+import {
+  CategoryPieChart,
+  ExpenseTrendChart,
+  TopCategoriesChart,
+} from "@/components/cfo/Charts";
 import { ChatPanel } from "@/components/cfo/ChatPanel";
+import { Comparison } from "@/components/cfo/Comparison";
+import { Budgets } from "@/components/cfo/Budgets";
+import { Reports } from "@/components/cfo/Reports";
 import { categorizeTransactions } from "@/lib/ai.functions";
 import { SAMPLE_CASH, sampleTransactions } from "@/lib/sample-data";
 import { analyze, buildSummary, inr, parseCsv, type Txn } from "@/lib/finance";
@@ -45,6 +52,7 @@ export const Route = createFileRoute("/")({
 function Dashboard() {
   const [txns, setTxns] = useState<Txn[]>([]);
   const [cash, setCash] = useState(SAMPLE_CASH);
+  const [budgets, setBudgets] = useState<Record<string, number>>({});
   const [status, setStatus] = useState<string | null>(null);
   const [categorizing, setCategorizing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -220,6 +228,24 @@ function Dashboard() {
                 <ExpenseTrendChart data={a.months} />
               </Panel>
             </section>
+
+            <section id="breakdown" className="mt-6">
+              <Panel title="Expense breakdown by category">
+                <CategoryPieChart data={a.expenseByCategory.slice(0, 8)} />
+              </Panel>
+            </section>
+
+            <div className="mt-6">
+              <Comparison txns={txns} />
+            </div>
+
+            <div className="mt-6">
+              <Budgets txns={txns} budgets={budgets} setBudgets={setBudgets} />
+            </div>
+
+            <div className="mt-6">
+              <Reports txns={txns} cash={cash} />
+            </div>
 
             <section className="mt-6 grid gap-4 xl:grid-cols-[1.15fr_1fr]">
               <div className="space-y-4">

@@ -1,8 +1,22 @@
-import { Activity, LineChart, MessageSquare, ShieldAlert, Upload } from "lucide-react";
+import {
+  Activity,
+  BarChart3,
+  FileText,
+  LineChart,
+  MessageSquare,
+  PieChart,
+  ShieldAlert,
+  Target,
+  Upload,
+} from "lucide-react";
 
 const items = [
   { id: "overview", label: "Overview", icon: LineChart },
   { id: "trends", label: "Trends", icon: Activity },
+  { id: "breakdown", label: "Category split", icon: PieChart },
+  { id: "compare", label: "Year comparison", icon: BarChart3 },
+  { id: "budgets", label: "Budgets", icon: Target },
+  { id: "reports", label: "Export reports", icon: FileText },
   { id: "anomalies", label: "Anomalies", icon: ShieldAlert },
   { id: "data", label: "Data & Import", icon: Upload },
   { id: "chat", label: "Ask the CFO", icon: MessageSquare },

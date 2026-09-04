@@ -111,3 +111,27 @@
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-card);
 }
+
+@media print {
+  body {
+    background: #fff;
+    color: #000;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #reports,
+  #reports * {
+    visibility: visible;
+  }
+  #reports {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    border: 0;
+    box-shadow: none;
+    background: #fff;
+    color: #000;
+    padding: 0;
+  }
+}
