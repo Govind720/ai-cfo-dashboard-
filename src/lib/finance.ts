@@ -413,3 +413,142 @@ export function cashFlow(txns: Txn[], fy: string, closingCash: number) {
   const netChange = monthly.reduce((a, m) => a + m.net, 0);
   return { fy, monthly, netChange, opening: closingCash - netChange, closing: closingCash };
 }
+
+/* ---------- Financial-year filtering & display ---------- */
+
+/** "FY2024-25" -> "FY 2024-25" */
+export const fyLabel = (fy: string) => fy.replace(/^FY/, "FY ");
+
+/** The 12 month keys (yyyy-mm) of an Indian FY, Apr -> Mar. */
+export function fyMonthKeys(fy: string): string[] {
+  const start = Number(fy.replace(/^FY/, "").slice(0, 4));
+  return FY_MONTH_LABELS.map((_, i) => {
+    const m = ((3 + i) % 12) + 1;
+    const y = i <= 8 ? start : start + 1;
+    return `${y}-${String(m).padStart(2, "0")}`;
+  });
+}
+
+export const filterByFy = (txns: Txn[], fy: string) =>
+  fy ? txns.filter((t) => fyKey(t.date) === fy) : txns;
+
+/** Always 12 points (Apr..Mar) for the selected FY. */
+export function fyMonthlySeries(txns: Txn[], fy: string) {
+  const keys = fyMonthKeys(fy);
+  return keys.map((month, i) => {
+    const rows = txns.filter((t) => monthKey(t.date) === month);
+    const expense = rows.filter((t) => t.type === "expense").reduce((a, t) => a + t.amount, 0);
+    const income = rows.filter((t) => t.type === "income").reduce((a, t) => a + t.amount, 0);
+    return { month, label: FY_MONTH_LABELS[i]!, expense, income, net: income - expense };
+  });
+}
+
+/** Indian numbering compact form: ₹1.2Cr / ₹4.5L / ₹32k */
+export function inrCompact(v: number) {
+  const s = v < 0 ? "-" : "";
+  const n = Math.abs(v);
+  if (n >= 1e7) return `${s}₹${(n / 1e7).toFixed(2)}Cr`;
+  if (n >= 1e5) return `${s}₹${(n / 1e5).toFixed(2)}L`;
+  if (n >= 1000) return `${s}₹${(n / 1000).toFixed(1)}k`;
+  return `${s}₹${Math.round(n)}`;
+}
+
+/* ---------- Compliance (TDS) ---------- */
+
+const PROFESSIONAL_HINTS = [
+  "professional",
+  "consult",
+  "legal",
+  "audit",
+  "advisory",
+  "contractor",
+  "freelance",
+  "ca ",
+  "accounting",
+];
+
+export type ComplianceFlag = {
+  id: string;
+  txnId: string;
+  title: string;
+  detail: string;
+  amount: number;
+  date: string;
+};
+
+/** Expenses > ₹30,000 on professional services need TDS (section 194J) review. */
+export function complianceFlags(txns: Txn[]): ComplianceFlag[] {
+  return txns
+    .filter((t) => {
+      if (t.type !== "expense" || t.amount <= 30000) return false;
+      const hay = `${t.category} ${t.description} ${t.vendor}`.toLowerCase();
+      return PROFESSIONAL_HINTS.some((h) => hay.includes(h));
+    })
+    .sort((a, b) => b.amount - a.amount)
+    .map((t) => ({
+      id: `tds-${t.id}`,
+      txnId: t.id,
+      title: `Check TDS compliance — ${t.vendor}`,
+      detail: `${inr(t.amount)} on ${t.date} for ${t.category || "Professional Services"} exceeds the ₹30,000 threshold (TDS u/s 194J @10% likely applicable).`,
+      amount: t.amount,
+      date: t.date,
+    }));
+}
+
+/* ---------- P&L with COGS ---------- */
+
+const COGS_HINTS = [
+  "cloud",
+  "aws",
+  "hosting",
+  "infrastructure",
+  "payment processing",
+  "payment gateway",
+  "razorpay",
+  "cogs",
+  "server",
+  "api cost",
+];
+
+export const isCogsCategory = (category: string) =>
+  COGS_HINTS.some((h) => category.toLowerCase().includes(h));
+
+export function plStatement(txns: Txn[], fy: string) {
+  const rows = filterByFy(txns, fy);
+  const group = (list: Txn[]) => {
+    const m = new Map<string, number>();
+    list.forEach((t) => {
+      const c = t.category?.trim() || "Uncategorized";
+      m.set(c, (m.get(c) ?? 0) + t.amount);
+    });
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  };
+  const revenue = group(rows.filter((t) => t.type === "income"));
+  const expenseRows = rows.filter((t) => t.type === "expense");
+  const cogs = group(expenseRows.filter((t) => isCogsCategory(t.category?.trim() || "")));
+  const opexAll = group(expenseRows.filter((t) => !isCogsCategory(t.category?.trim() || "")));
+  const tax = opexAll.filter(([c]) => c.toLowerCase().includes("tax"));
+  const opex = opexAll.filter(([c]) => !c.toLowerCase().includes("tax"));
+  const total = (l: [string, number][]) => l.reduce((a, [, v]) => a + v, 0);
+  const totalRevenue = total(revenue);
+  const totalCogs = total(cogs);
+  const grossProfit = totalRevenue - totalCogs;
+  const totalOpex = total(opex);
+  const totalTax = total(tax);
+  const ebitda = grossProfit - totalOpex;
+  return {
+    fy,
+    revenue,
+    cogs,
+    opex,
+    tax,
+    totalRevenue,
+    totalCogs,
+    grossProfit,
+    grossMargin: totalRevenue ? (grossProfit / totalRevenue) * 100 : 0,
+    totalOpex,
+    totalTax,
+    ebitda,
+    netProfit: ebitda - totalTax,
+  };
+}
