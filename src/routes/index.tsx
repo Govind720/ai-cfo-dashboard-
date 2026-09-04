@@ -52,6 +52,7 @@ export const Route = createFileRoute("/")({
 function Dashboard() {
   const [txns, setTxns] = useState<Txn[]>([]);
   const [cash, setCash] = useState(SAMPLE_CASH);
+  const [budgets, setBudgets] = useState<Record<string, number>>({});
   const [status, setStatus] = useState<string | null>(null);
   const [categorizing, setCategorizing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
