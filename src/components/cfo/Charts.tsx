@@ -13,7 +13,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { inr, type Analytics } from "@/lib/finance";
+import { inr, inrCompact, type Analytics } from "@/lib/finance";
 
 const palette = [
   "var(--color-chart-1)",
@@ -23,12 +23,8 @@ const palette = [
   "var(--color-chart-5)",
 ];
 
-const compact = (v: number) =>
-  v >= 10000000
-    ? `₹${(v / 10000000).toFixed(1)}Cr`
-    : v >= 100000
-      ? `₹${(v / 100000).toFixed(1)}L`
-      : `₹${Math.round(v / 1000)}k`;
+const compact = inrCompact;
+
 
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
