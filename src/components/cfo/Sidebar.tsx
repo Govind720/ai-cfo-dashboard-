@@ -5,12 +5,15 @@ import {
   LineChart,
   MessageSquare,
   PieChart,
+  Scale,
   ShieldAlert,
+  Sparkles,
   Target,
   Upload,
 } from "lucide-react";
 
 const items = [
+  { id: "briefing", label: "AI CFO Briefing", icon: Sparkles },
   { id: "overview", label: "Overview", icon: LineChart },
   { id: "trends", label: "Trends", icon: Activity },
   { id: "breakdown", label: "Category split", icon: PieChart },
@@ -18,9 +21,11 @@ const items = [
   { id: "budgets", label: "Budgets", icon: Target },
   { id: "reports", label: "Export reports", icon: FileText },
   { id: "anomalies", label: "Anomalies", icon: ShieldAlert },
+  { id: "compliance", label: "Compliance", icon: Scale },
   { id: "data", label: "Data & Import", icon: Upload },
   { id: "chat", label: "Ask the CFO", icon: MessageSquare },
 ];
+
 
 export function Sidebar() {
   return (
