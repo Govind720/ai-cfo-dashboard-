@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Send, Sparkles } from "lucide-react";
 import { askCfo } from "@/lib/ai.functions";
@@ -12,11 +12,21 @@ const suggestions = [
   "Any duplicate or suspicious payments?",
 ];
 
-export function ChatPanel({ summary, disabled }: { summary: string; disabled: boolean }) {
+export function ChatPanel({
+  summary,
+  disabled,
+  pending,
+}: {
+  summary: string;
+  disabled: boolean;
+  pending?: { id: number; question: string } | null;
+}) {
   const ask = useServerFn(askCfo);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const lastPending = useRef(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   async function send(question: string) {
     if (!question.trim() || loading || disabled) return;
@@ -36,6 +46,18 @@ export function ChatPanel({ summary, disabled }: { summary: string; disabled: bo
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!pending || pending.id === lastPending.current) return;
+    lastPending.current = pending.id;
+    void send(pending.question);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, loading]);
+
 
   return (
     <section id="chat" className="panel flex h-[620px] flex-col p-5">
