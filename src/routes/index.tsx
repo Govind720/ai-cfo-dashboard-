@@ -14,8 +14,15 @@ import {
   Wallet,
 } from "lucide-react";
 import { Sidebar } from "@/components/cfo/Sidebar";
-import { ExpenseTrendChart, TopCategoriesChart } from "@/components/cfo/Charts";
+import {
+  CategoryPieChart,
+  ExpenseTrendChart,
+  TopCategoriesChart,
+} from "@/components/cfo/Charts";
 import { ChatPanel } from "@/components/cfo/ChatPanel";
+import { Comparison } from "@/components/cfo/Comparison";
+import { Budgets } from "@/components/cfo/Budgets";
+import { Reports } from "@/components/cfo/Reports";
 import { categorizeTransactions } from "@/lib/ai.functions";
 import { SAMPLE_CASH, sampleTransactions } from "@/lib/sample-data";
 import { analyze, buildSummary, inr, parseCsv, type Txn } from "@/lib/finance";
