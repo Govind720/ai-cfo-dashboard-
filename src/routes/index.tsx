@@ -228,6 +228,24 @@ function Dashboard() {
               </Panel>
             </section>
 
+            <section id="breakdown" className="mt-6">
+              <Panel title="Expense breakdown by category">
+                <CategoryPieChart data={a.expenseByCategory.slice(0, 8)} />
+              </Panel>
+            </section>
+
+            <div className="mt-6">
+              <Comparison txns={txns} />
+            </div>
+
+            <div className="mt-6">
+              <Budgets txns={txns} budgets={budgets} setBudgets={setBudgets} />
+            </div>
+
+            <div className="mt-6">
+              <Reports txns={txns} cash={cash} />
+            </div>
+
             <section className="mt-6 grid gap-4 xl:grid-cols-[1.15fr_1fr]">
               <div className="space-y-4">
                 <Panel
