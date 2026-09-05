@@ -1,42 +1,24 @@
-# FinBuddy AI
+# AI-CFO: The Intelligent Finance Controller 🇮🇳
 
-Build a web app called "AI CFO", an AI finance controller dashboard.
+![Banner](banner.png)
 
-Features:
+## 🚀 Live Demo
+[https://preview--ai-cfo-buddy-20.lovable.app/]
 
-CSV upload for transactions with columns: date, description, vendor, category, amount, type (income/expense)
+## 📌 Project Overview
+AI-CFO is a next-generation finance controller built for the **Razorpay Buildathon**. As a Finance Graduate, I designed this tool to bridge the gap between messy bank statements and strategic CFO-level decision-making.
 
-Auto-categorize uncategorized transactions using the Google Gemini API
+### Key "Finance-First" Features:
+- **Indian FY Logic:** Automatically structures data into the April-March Financial Year.
+- **Compliance Guard:** Flags payments >₹30k for TDS checking and detects GST-missing entries.
+- **Audit Anomaly Detection:** Uses AI to find duplicate vendor payments and policy violations (e.g., Sunday spends).
+- **CFO Chat (Gemini Pro):** Ask complex questions like "Can we afford to hire 2 people?" or "Why did costs spike in July?"
+- **Professional Reports:** One-click export for P&L and Cash Flow statements.
 
-Dashboard showing: monthly burn rate, cash runway, top 5 expense categories (chart), month-over-month expense trend (chart), and flagged anomalies (duplicate payments, unusually large amounts vs category average)
+## 🛠️ Tech Stack
+- **AI:** Google Gemini API
+- **Frontend:** React + Tailwind CSS
+- **Platform:** Lovable / GitHub
 
-A chat panel where the user asks questions in plain English (e.g., "Why did expenses spike in July?", "What's our runway?"). Send the transaction summary + question to the Gemini API and answer like a CFO with specific numbers
-
-Include a "Load sample data" button with realistic Indian startup transactions (salaries, AWS, marketing, GST payments, Razorpay fees), include one hidden duplicate payment and a July expense spike in the sample data
-
-Clean professional fintech design: dark sidebar, cards, charts
-
-Store the Gemini API key as an environment variable/secret, never hardcode it.
-
-This project was built with [Lovable](https://lovable.dev).
-
-**Live app**: https://ai-cfo-buddy-20.lovable.app
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/20b3873b-3aab-400b-91c2-9c2af6cdd2af).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
-
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
-```
+## 🧑‍🎓 About the Author
+Built by a Finance Graduate with a passion for AI. I focused on making the accounting logic 100% accurate for the Indian startup ecosystem.
