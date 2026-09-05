@@ -1,3 +1,6 @@
+<p align="center">
+  <img src="banner.png" alt="AI-CFO Banner" width="100%">
+</p>
 # AI-CFO: The Intelligent Finance Controller 🇮🇳
 
 ![Banner](banner.png)
