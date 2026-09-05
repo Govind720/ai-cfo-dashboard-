@@ -3,8 +3,6 @@
 </p>
 # AI-CFO: The Intelligent Finance Controller 🇮🇳
 
-![Banner](banner.png)
-
 ## 🚀 Live Demo
 [https://preview--ai-cfo-buddy-20.lovable.app/]
 
