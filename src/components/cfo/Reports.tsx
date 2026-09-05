@@ -48,7 +48,7 @@ export function Reports({ txns, cash, fy }: { txns: Txn[]; cash: number; fy: str
           <Row label="Total operating expenses (IV)" amount={pl.totalOpex} bold rule />
 
           <Row label="V. Profit before tax (III - IV)" amount={pl.ebitda} bold />
-          <Row label="VI. Tax expense (GST &amp; statutory)" amount={pl.totalTax} indent />
+          <Row label="VI. Tax expense (GST & statutory)" amount={pl.totalTax} indent />
           <Row label="VII. Net profit / (loss) for the year" amount={pl.netProfit} bold rule />
         </Statement>
 
