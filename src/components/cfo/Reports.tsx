@@ -1,68 +1,58 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { FileText, Printer } from "lucide-react";
-import { cashFlow, fiscalYears, inr, profitAndLoss, type Txn } from "@/lib/finance";
+import { cashFlow, fyLabel, inr, plStatement, type Txn } from "@/lib/finance";
 
-export function Reports({ txns, cash }: { txns: Txn[]; cash: number }) {
-  const years = useMemo(() => fiscalYears(txns), [txns]);
-  const [fy, setFy] = useState("");
-  const activeFy = years.includes(fy) ? fy : (years.at(-1) ?? "");
-  const pl = useMemo(() => profitAndLoss(txns, activeFy), [txns, activeFy]);
-  const cf = useMemo(() => cashFlow(txns, activeFy, cash), [txns, activeFy, cash]);
+export function Reports({ txns, cash, fy }: { txns: Txn[]; cash: number; fy: string }) {
+  const pl = useMemo(() => plStatement(txns, fy), [txns, fy]);
+  const cf = useMemo(() => cashFlow(txns, fy, cash), [txns, fy, cash]);
 
   return (
     <section id="reports" className="panel p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <FileText className="h-4 w-4 text-primary" /> Export reports
+          <FileText className="h-4 w-4 text-primary" /> Export reports — {fyLabel(fy)}
         </h2>
-        <div className="flex items-center gap-2">
-          <select
-            value={activeFy}
-            onChange={(e) => setFy(e.target.value)}
-            className="rounded-md border border-input bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
-          >
-            {years.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-          >
-            <Printer className="h-3.5 w-3.5" /> Download PDF / Print
-          </button>
-        </div>
+        <button
+          onClick={() => window.print()}
+          className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+        >
+          <Printer className="h-3.5 w-3.5" /> Export P&amp;L (PDF / Print)
+        </button>
       </div>
 
       <div id="statements" className="space-y-6">
-        <Statement title={`Statement of Profit and Loss — ${activeFy}`}>
+        <Statement title={`Statement of Profit and Loss — ${fyLabel(fy)}`}>
           <Row label="I. Revenue from operations" bold />
-          {pl.income.map(([c, v]) => (
+          {pl.revenue.map(([c, v]) => (
             <Row key={c} label={c} amount={v} indent />
           ))}
-          <Row label="Total income (I)" amount={pl.totalIncome} bold rule />
+          <Row label="Total revenue (I)" amount={pl.totalRevenue} bold rule />
 
-          <Row label="II. Expenses" bold />
-          {pl.expenses
-            .filter(([c]) => c !== "Taxes")
-            .map(([c, v]) => (
-              <Row key={c} label={c} amount={v} indent />
-            ))}
+          <Row label="II. Cost of goods sold (COGS)" bold />
+          {pl.cogs.map(([c, v]) => (
+            <Row key={c} label={c} amount={v} indent />
+          ))}
+          <Row label="Total COGS (II)" amount={pl.totalCogs} bold rule />
+
           <Row
-            label="Total expenses (II)"
-            amount={pl.totalExpense - pl.taxes}
+            label={`III. Gross profit (I - II) — margin ${pl.grossMargin.toFixed(1)}%`}
+            amount={pl.grossProfit}
             bold
             rule
           />
 
-          <Row label="III. Profit before tax (I - II)" amount={pl.pbt} bold />
-          <Row label="IV. Tax expense (GST & statutory)" amount={pl.taxes} indent />
-          <Row label="V. Profit / (Loss) for the year" amount={pl.net} bold rule />
+          <Row label="IV. Operating expenses" bold />
+          {pl.opex.map(([c, v]) => (
+            <Row key={c} label={c} amount={v} indent />
+          ))}
+          <Row label="Total operating expenses (IV)" amount={pl.totalOpex} bold rule />
+
+          <Row label="V. Profit before tax (III - IV)" amount={pl.ebitda} bold />
+          <Row label="VI. Tax expense (GST &amp; statutory)" amount={pl.totalTax} indent />
+          <Row label="VII. Net profit / (loss) for the year" amount={pl.netProfit} bold rule />
         </Statement>
 
-        <Statement title={`Cash Flow Statement — ${activeFy}`}>
+        <Statement title={`Cash Flow Statement — ${fyLabel(fy)}`}>
           <Row label="Opening cash and cash equivalents" amount={cf.opening} />
           <Row label="Cash flows from operating activities" bold />
           {cf.monthly.map((m) => (
@@ -74,8 +64,8 @@ export function Reports({ txns, cash }: { txns: Txn[]; cash: number }) {
       </div>
 
       <p className="mt-4 text-xs text-muted-foreground print:hidden">
-        Amounts in INR. Financial year follows the Indian convention (1 April – 31 March).
-        Use your browser&rsquo;s &ldquo;Save as PDF&rdquo; destination to export.
+        Amounts in INR (Indian numbering system). Financial year follows the Indian convention
+        (1 April – 31 March). Use your browser&rsquo;s &ldquo;Save as PDF&rdquo; destination to export.
       </p>
     </section>
   );
