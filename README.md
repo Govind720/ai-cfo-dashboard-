@@ -4,7 +4,7 @@
 # AI-CFO: The Intelligent Finance Controller 🇮🇳
 
 ## 🚀 Live Demo
-[https://preview--ai-cfo-buddy-20.lovable.app/]
+[https://ai-cfo-buddy-20.lovable.app]
 
 ## 📺 Watch the 5-Minute Project Pitch Video [Click Here](https://drive.google.com/file/d/1plyIrCGIT-qp8aqQPsu9ghnJcKzOq0ik/view?usp=drive_link)
 
