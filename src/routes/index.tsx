@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   AlertTriangle,
@@ -8,6 +8,9 @@ import {
   Copy,
   Database,
   Flame,
+  MessageSquare,
+  RefreshCw,
+  Scale,
   Sparkles,
   Timer,
   Upload,
@@ -23,9 +26,20 @@ import { ChatPanel } from "@/components/cfo/ChatPanel";
 import { Comparison } from "@/components/cfo/Comparison";
 import { Budgets } from "@/components/cfo/Budgets";
 import { Reports } from "@/components/cfo/Reports";
-import { categorizeTransactions } from "@/lib/ai.functions";
+import { categorizeTransactions, cfoBriefing } from "@/lib/ai.functions";
 import { SAMPLE_CASH, sampleTransactions } from "@/lib/sample-data";
-import { analyze, buildSummary, inr, parseCsv, type Txn } from "@/lib/finance";
+import {
+  analyze,
+  buildSummary,
+  complianceFlags,
+  filterByFy,
+  fiscalYears,
+  fyLabel,
+  fyMonthlySeries,
+  inr,
+  parseCsv,
+  type Txn,
+} from "@/lib/finance";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -55,12 +69,55 @@ function Dashboard() {
   const [budgets, setBudgets] = useState<Record<string, number>>({});
   const [status, setStatus] = useState<string | null>(null);
   const [categorizing, setCategorizing] = useState(false);
+  const [fy, setFy] = useState("");
+  const [briefing, setBriefing] = useState("");
+  const [briefingLoading, setBriefingLoading] = useState(false);
+  const [pending, setPending] = useState<{ id: number; question: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const categorize = useServerFn(categorizeTransactions);
+  const brief = useServerFn(cfoBriefing);
 
-  const a = useMemo(() => analyze(txns, cash), [txns, cash]);
-  const summary = useMemo(() => (txns.length ? buildSummary(a, txns) : ""), [a, txns]);
+  const years = useMemo(() => fiscalYears(txns), [txns]);
+  const activeFy = years.includes(fy) ? fy : (years.at(-1) ?? "");
+  const yearTxns = useMemo(() => filterByFy(txns, activeFy), [txns, activeFy]);
+
+  const a = useMemo(() => analyze(yearTxns, cash), [yearTxns, cash]);
+  const series = useMemo(
+    () => (activeFy ? fyMonthlySeries(yearTxns, activeFy) : a.months),
+    [yearTxns, activeFy, a.months],
+  );
+  const compliance = useMemo(() => complianceFlags(yearTxns), [yearTxns]);
+  const summary = useMemo(() => {
+    if (!yearTxns.length) return "";
+    const base = buildSummary(a, yearTxns);
+    const tds = compliance.length
+      ? compliance.map((c) => `- ${c.title}: ${c.detail}`).join("\n")
+      : "- none";
+    return `Financial year: ${fyLabel(activeFy)}\n${base}\n\nTDS compliance checks (professional services above Rs 30,000):\n${tds}`;
+  }, [a, yearTxns, compliance, activeFy]);
   const hasData = txns.length > 0;
+
+  async function loadBriefing() {
+    if (!summary) return;
+    setBriefingLoading(true);
+    try {
+      const res = await brief({ data: { fy: fyLabel(activeFy), summary } });
+      setBriefing(res.briefing);
+    } catch (e) {
+      setBriefing(e instanceof Error ? e.message : "Could not generate the briefing.");
+    } finally {
+      setBriefingLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    setBriefing("");
+  }, [activeFy, txns]);
+
+  function investigate(question: string) {
+    setPending({ id: Date.now(), question });
+    document.getElementById("chat")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 
   async function onFile(file: File) {
     const rows = parseCsv(await file.text());
@@ -69,12 +126,13 @@ function Dashboard() {
       return;
     }
     setTxns(rows);
+    setFy("");
     setStatus(`Imported ${rows.length} transactions from ${file.name}.`);
   }
 
   async function runCategorize() {
-    const pending = a.uncategorized;
-    if (!pending.length) {
+    const pendingRows = a.uncategorized;
+    if (!pendingRows.length) {
       setStatus("All transactions are already categorized.");
       return;
     }
@@ -84,7 +142,7 @@ function Dashboard() {
       const known = [...new Set(txns.map((t) => t.category).filter(Boolean))];
       const res = await categorize({
         data: {
-          items: pending.slice(0, 100).map((t) => ({
+          items: pendingRows.slice(0, 100).map((t) => ({
             id: t.id,
             description: t.description,
             vendor: t.vendor,
@@ -105,8 +163,9 @@ function Dashboard() {
   }
 
   const runway = Number.isFinite(a.runwayMonths) ? `${a.runwayMonths.toFixed(1)} mo` : "∞";
-  const lastMonth = a.months.at(-1);
-  const prevMonth = a.months.at(-2);
+  const withData = series.filter((m) => m.expense || m.income);
+  const lastMonth = withData.at(-1);
+  const prevMonth = withData.at(-2);
   const momChange =
     lastMonth && prevMonth && prevMonth.expense
       ? ((lastMonth.expense - prevMonth.expense) / prevMonth.expense) * 100
@@ -124,7 +183,23 @@ function Dashboard() {
               Your always-on finance controller — burn, runway, anomalies and answers.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {years.length > 0 && (
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm">
+                <span className="text-xs text-muted-foreground">Financial year</span>
+                <select
+                  value={activeFy}
+                  onChange={(e) => setFy(e.target.value)}
+                  className="num bg-transparent text-sm font-medium outline-none"
+                >
+                  {years.map((y) => (
+                    <option key={y} value={y} className="bg-card">
+                      {fyLabel(y)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <input
               ref={fileRef}
               type="file"
@@ -146,6 +221,7 @@ function Dashboard() {
               onClick={() => {
                 setTxns(sampleTransactions);
                 setCash(SAMPLE_CASH);
+                setFy("");
                 setStatus(`Loaded ${sampleTransactions.length} sample transactions.`);
               }}
               className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium transition-colors hover:bg-accent"
@@ -180,6 +256,28 @@ function Dashboard() {
           </div>
         ) : (
           <>
+            <section id="briefing" className="panel mt-6 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="flex items-center gap-2 text-sm font-semibold">
+                  <Sparkles className="h-4 w-4 text-primary" /> AI CFO Briefing — {fyLabel(activeFy)}
+                </h2>
+                <button
+                  onClick={() => void loadBriefing()}
+                  disabled={briefingLoading}
+                  className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-40"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${briefingLoading ? "animate-spin" : ""}`} />
+                  {briefing ? "Regenerate" : "Generate briefing"}
+                </button>
+              </div>
+              <p className="mt-3 text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">
+                {briefingLoading
+                  ? "Reviewing the ledger for the selected financial year…"
+                  : briefing ||
+                    "Generate a three-sentence executive summary of this year's performance, the biggest cost-saving opportunity and your main cash-flow risk."}
+              </p>
+            </section>
+
             <section id="overview" className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <Stat
                 icon={<Flame className="h-4 w-4 text-destructive" />}
@@ -221,16 +319,16 @@ function Dashboard() {
             </section>
 
             <section id="trends" className="mt-6 grid gap-4 xl:grid-cols-2">
-              <Panel title="Top 5 expense categories">
+              <Panel title={`Top 5 expense categories — ${fyLabel(activeFy)}`}>
                 <TopCategoriesChart data={a.topCategories} />
               </Panel>
-              <Panel title="Month-over-month trend">
-                <ExpenseTrendChart data={a.months} />
+              <Panel title={`Month-over-month trend (Apr – Mar, ${fyLabel(activeFy)})`}>
+                <ExpenseTrendChart data={series} />
               </Panel>
             </section>
 
             <section id="breakdown" className="mt-6">
-              <Panel title="Expense breakdown by category">
+              <Panel title={`Expense breakdown by category — ${fyLabel(activeFy)}`}>
                 <CategoryPieChart data={a.expenseByCategory.slice(0, 8)} />
               </Panel>
             </section>
@@ -240,11 +338,11 @@ function Dashboard() {
             </div>
 
             <div className="mt-6">
-              <Budgets txns={txns} budgets={budgets} setBudgets={setBudgets} />
+              <Budgets txns={yearTxns} budgets={budgets} setBudgets={setBudgets} />
             </div>
 
             <div className="mt-6">
-              <Reports txns={txns} cash={cash} />
+              <Reports txns={txns} cash={cash} fy={activeFy} />
             </div>
 
             <section className="mt-6 grid gap-4 xl:grid-cols-[1.15fr_1fr]">
@@ -272,17 +370,64 @@ function Dashboard() {
                               <AlertTriangle className="h-4 w-4 text-destructive" />
                             )}
                           </div>
-                          <div>
+                          <div className="flex-1">
                             <p className="text-sm font-medium">{x.title}</p>
                             <p className="mt-0.5 text-xs text-muted-foreground">{x.detail}</p>
                           </div>
+                          <button
+                            onClick={() =>
+                              investigate(
+                                `Investigate this flagged ${x.kind} in ${fyLabel(activeFy)}: "${x.title}" — ${x.detail}. Explain the likely cause, the financial impact, and what I should do about it.`,
+                              )
+                            }
+                            className="inline-flex h-fit shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent"
+                          >
+                            <MessageSquare className="h-3.5 w-3.5" /> Investigate
+                          </button>
                         </li>
                       ))}
                     </ul>
                   )}
                 </Panel>
 
-                <Panel title={`Transactions (${txns.length})`} id="data">
+                <Panel
+                  title={`Compliance checks (${compliance.length})`}
+                  id="compliance"
+                  icon={<Scale className="h-4 w-4 text-warning" />}
+                >
+                  {compliance.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No professional-services payments above ₹30,000 in this year.
+                    </p>
+                  ) : (
+                    <ul className="space-y-3">
+                      {compliance.map((c) => (
+                        <li
+                          key={c.id}
+                          className="flex gap-3 rounded-lg border border-warning/40 bg-warning/5 p-3"
+                        >
+                          <Scale className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{c.title}</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">{c.detail}</p>
+                          </div>
+                          <button
+                            onClick={() =>
+                              investigate(
+                                `TDS compliance check: ${c.detail} Explain the TDS obligation under Indian law for this payment and the exact amount to deduct and deposit.`,
+                              )
+                            }
+                            className="inline-flex h-fit shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent"
+                          >
+                            <MessageSquare className="h-3.5 w-3.5" /> Investigate
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Panel>
+
+                <Panel title={`Transactions (${yearTxns.length})`} id="data">
                   <div className="max-h-80 overflow-auto">
                     <table className="w-full text-left text-xs">
                       <thead className="sticky top-0 bg-card text-muted-foreground">
@@ -294,7 +439,7 @@ function Dashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {txns.map((t) => (
+                        {yearTxns.map((t) => (
                           <tr key={t.id} className="border-t border-border">
                             <td className="num py-2 pr-3 text-muted-foreground">{t.date}</td>
                             <td className="py-2 pr-3">
@@ -307,7 +452,7 @@ function Dashboard() {
                               </span>
                             </td>
                             <td
-                              className={`num py-2 pr-1 text-right ${t.type === "income" ? "text-primary" : "text-foreground"}`}
+                              className={`num py-2 pr-1 text-right ${t.type === "income" ? "text-success" : "text-foreground"}`}
                             >
                               {t.type === "income" ? "+" : "-"}
                               {inr(t.amount)}
@@ -320,7 +465,7 @@ function Dashboard() {
                 </Panel>
               </div>
 
-              <ChatPanel summary={summary} disabled={!hasData} />
+              <ChatPanel summary={summary} disabled={!hasData} pending={pending} />
             </section>
           </>
         )}
